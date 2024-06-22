@@ -26,13 +26,13 @@ index_landmark_id = mp_hands.HandLandmark.INDEX_FINGER_TIP
 middle_landmark_id = mp_hands.HandLandmark.MIDDLE_FINGER_TIP
 
 # Zone and box properties (adjust values as needed)
-ZONE_HEIGHT = 120  # Adjusted to accommodate fingers
-ZONE_WIDTH = 200
+BASE_ZONE_HEIGHT = 120  # Adjusted to accommodate fingers
+BASE_ZONE_WIDTH = 200
 ZONE_COLOR = (0, 255, 0)  # Green color
 BOX_OFFSET_X = 15  # Offset to bring boxes closer to hand (adjust as needed)
 BOX_OFFSET_Y = 5   # Offset for fine-tuning
-BOX_WIDTH = 60
-BOX_HEIGHT = 60
+BASE_BOX_WIDTH = 60
+BASE_BOX_HEIGHT = 60
 
 # Store previous hand positions
 prev_hand_y = None
@@ -46,6 +46,10 @@ top_zone_frames_slow = deque(maxlen=SCROLL_DEBOUNCE_FRAMES)
 bottom_zone_frames_slow = deque(maxlen=SCROLL_DEBOUNCE_FRAMES)
 
 scrolling_paused = False
+
+def scale_zone_dimensions(wrist_z, base_value):
+    scale_factor = max(0.3, min(0.8, 0.6/ (wrist_z + 0.1)))  # Scale factor between 0.5 and 2.0
+    return int(base_value * scale_factor)
 
 while True:
     success, img = cap.read()
@@ -89,12 +93,19 @@ while True:
                 wrist_landmark = hand_landmarks.landmark[wrist_landmark_id]
                 wrist_x = int(wrist_landmark.x * frame.shape[1])
                 wrist_y = int(wrist_landmark.y * frame.shape[0])
-
-                # Calculate positions for scroll zones and boxes
-                top_zone_top_left = (wrist_x - 2*ZONE_WIDTH // 2, wrist_y - ZONE_HEIGHT - 6* BOX_HEIGHT // 2)
-                top_zone_bottom_right = (wrist_x + 2*ZONE_WIDTH // 2, wrist_y - 6*BOX_HEIGHT // 2)
-                bottom_zone_top_left = (wrist_x - 2*ZONE_WIDTH // 2, wrist_y -2* BOX_HEIGHT // 2)
-                bottom_zone_bottom_right = (wrist_x + 2*ZONE_WIDTH // 2, wrist_y + ZONE_HEIGHT - 2* BOX_HEIGHT // 2)
+                wrist_z = wrist_landmark.z
+                
+                ZONE_HEIGHT = scale_zone_dimensions(wrist_z, BASE_ZONE_HEIGHT)
+                ZONE_WIDTH = scale_zone_dimensions(wrist_z, BASE_ZONE_WIDTH)
+                BOX_WIDTH = scale_zone_dimensions(wrist_z, BASE_BOX_WIDTH)
+                BOX_HEIGHT = scale_zone_dimensions(wrist_z, BASE_BOX_HEIGHT)
+                y_offset_up = int(scale_zone_dimensions(wrist_y / frame.shape[0], BASE_ZONE_HEIGHT))+30
+                y_offset_down = int(scale_zone_dimensions(wrist_y / frame.shape[0], BASE_ZONE_HEIGHT))-2*BOX_HEIGHT
+                x_offset = int(scale_zone_dimensions(wrist_y / frame.shape[0], BASE_ZONE_HEIGHT))+2*BOX_HEIGHT                # Calculate positions for scroll zones and boxes
+                top_zone_top_left = (wrist_x-x_offset - ZONE_WIDTH, wrist_y - y_offset_up - 2 * BOX_HEIGHT)
+                top_zone_bottom_right = (wrist_x-x_offset + ZONE_WIDTH, wrist_y - y_offset_up)
+                bottom_zone_top_left = (wrist_x-x_offset - ZONE_WIDTH, wrist_y + y_offset_down)
+                bottom_zone_bottom_right = (wrist_x-x_offset + ZONE_WIDTH, wrist_y + y_offset_down + 2 * BOX_HEIGHT)
 
                 # Draw scroll zones on the frame
                 cv2.rectangle(frame, top_zone_top_left, top_zone_bottom_right, ZONE_COLOR, 2)
